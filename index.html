@@ -2,22 +2,20 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <!-- 🛡️ ป้องกันการซูมระดับ Meta Tag (มาตรฐาน) -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, shrink-to-fit=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
     <title>RetireSafe | วางแผนจัดพอร์ตวัยเกษียณ</title>
     
     <!-- โหลด Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 🌟 เปลี่ยน CDN เป็น Cloudflare (cdnjs) และ jsDelivr แก้ปัญหาจอขาว 100% -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js" crossorigin="anonymous"></script>
+    <!-- โหลด React & ReactDOM (ใช้ CDN ดั้งเดิมที่ทำงานได้ของคุณ) -->
+    <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"></script>
     
-    <!-- โหลด Dependencies ของกราฟ -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-is/18.2.0/umd/react-is.production.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/recharts@2.1.9/umd/Recharts.js" crossorigin="anonymous"></script>
+    <!-- โหลด Recharts สำหรับวาดกราฟ (ใช้ CDN ดั้งเดิมที่ทำงานได้ของคุณ) -->
+    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.10.3/umd/Recharts.js"></script>
 
     <style>
         body { background-color: #f1f5f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #334155; }
@@ -27,7 +25,7 @@
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         
-        /* สไตล์สำหรับปุ่ม Progress ที่กดได้ */
+        /* สไตล์สำหรับปุ่ม Progress ที่กดได้ (Undo/Redo) */
         .step-clickable { cursor: pointer; transition: transform 0.2s; }
         .step-clickable:hover { transform: scale(1.1); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         
@@ -37,24 +35,15 @@
                 font-size: 16px !important;
             }
         }
-        /* ป้องกัน Double-Tap to Zoom บนมือถือ */
         button, input, select, textarea { touch-action: manipulation; }
     </style>
 </head>
 <body>
-    <!-- 🛡️ Pre-render UI: โชว์หน้านี้ระหว่างรอ Script โหลด ป้องกันจอขาวให้ผู้ใช้ตกใจ -->
-    <div id="root">
-        <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; font-family: sans-serif; color: #64748b; background-color: #f1f5f9;">
-            <div style="font-size: 2.5rem; margin-bottom: 1rem; animation: pulse 1.5s infinite;">⏳</div>
-            <div style="font-weight: bold; font-size: 1.2rem;">กำลังดาวน์โหลดระบบ...</div>
-            <div style="font-size: 0.8rem; margin-top: 0.5rem; color: #94a3b8;">หากค้างเกิน 5 วินาที กรุณารีเฟรชหน้าจอ</div>
-        </div>
-    </div>
+    <div id="root"></div>
 
     <script type="text/babel">
-        // 🛡️ ป้องกันระบบพังจากการดึงตัวแปรตอนโหลดไลบรารีกราฟไม่สำเร็จ
         const { useState, useMemo, useEffect, useRef } = React;
-        const { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } = window.Recharts || {};
+        const { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } = window.Recharts;
 
         // --- Utility ---
         const formatMoney = (amount) => "฿" + Math.round(Number(amount) || 0).toLocaleString("th-TH");
@@ -67,7 +56,7 @@
 
         function App() {
             const [step, setStep] = useState(1);
-            const [highestStep, setHighestStep] = useState(1);
+            const [highestStep, setHighestStep] = useState(1); // Tracker สำหรับเปิดให้คลิกย้อนกลับ/เดินหน้า
             
             // --- State: เก็บข้อมูลทั้งหมด ---
             const [data, setData] = useState({
@@ -75,7 +64,8 @@
                 income: "", totalDebt: "", lumpSum: "",
                 essentialExp: "", discretionaryExp: "", largeExp: "", inflation: "3",
                 healthCover: "partial", healthConcern: "low",
-                experience: "1", reaction: "2", risk: "1", goal: "1"
+                // Risk Metrics (เพิ่มคำถามเป็น 4 ข้อให้แม่นยำขึ้น)
+                experience: "1", reaction: "2", risk: "2", goal: "2"
             });
 
             const updateData = (field, value) => setData(prev => ({ ...prev, [field]: value }));
@@ -114,7 +104,7 @@
                     currentAge: "60", expectAge: "85", income: "", totalDebt: "", lumpSum: "", 
                     essentialExp: "", discretionaryExp: "", largeExp: "", inflation: "3", 
                     healthCover: "partial", healthConcern: "low", 
-                    experience: "1", reaction: "2", risk: "1", goal: "1" 
+                    experience: "1", reaction: "2", risk: "2", goal: "2" 
                 }); 
             };
 
@@ -139,7 +129,7 @@
                 const netLumpSum = lumpSum - totalDebt;
                 const totalMonthlyExp = essentialExp + discretionaryExp;
                 let monthlyShortfall = totalMonthlyExp - income;
-                if (monthlyShortfall < 0) monthlyShortfall = 0; 
+                if (monthlyShortfall < 0) monthlyShortfall = 0; // รายรับเกินรายจ่าย ไม่เดือดร้อน
                 const annualShortfall = monthlyShortfall * 12;
 
                 // 2. Safe Bucket
@@ -152,14 +142,14 @@
                 const safeBucketTotal = livingReserve + healthBuffer + largeExp;
                 const investableCapital = netLumpSum - safeBucketTotal;
 
-                // 3. Advanced Risk Scoring (4-12 points)
+                // 3. Advanced Risk Scoring (คะแนนรวม 4-12 แต้ม)
                 const scoreEx = parseInt(data.experience);
                 const scoreRe = parseInt(data.reaction);
                 const scoreRi = parseInt(data.risk);
                 const scoreGo = parseInt(data.goal);
                 const totalScore = scoreEx + scoreRe + scoreRi + scoreGo;
 
-                let strategyName, expectedReturn, expectedReturnDec, portfolio;
+                let strategyName = "", expectedReturn = "", expectedReturnDec = 0, portfolio = [];
                 
                 if (totalScore <= 6) { 
                     strategyName = "พอร์ตปกป้องเงินต้น (Conservative)";
@@ -195,56 +185,59 @@
                 let yearsLast = 0;
                 let projectionData = [];
 
-                if (investableCapital <= 0) {
-                    swrStatus = "เน้นสร้างความปลอดภัยก่อน 🛡️";
-                    swrMessage = netLumpSum > 0 
-                        ? `เงินก้อนที่มีเหมาะสำหรับกันไว้เป็นทุนสำรองฉุกเฉินและสภาพคล่องทั้งหมด แนะนำให้ฝากออมทรัพย์หรือกองทุนตลาดเงิน ไม่ควรนำไปลงทุนเสี่ยง`
-                        : `ปัจจุบันคุณมียอดหนี้สินสูงกว่าเงินก้อนที่มี แนะนำให้โฟกัสที่การปลดหนี้และลดรายจ่ายเป็นอันดับแรกสุด`;
-                    swrClass = "text-amber-600"; swrIcon = "bg-amber-100 border-amber-200";
-                    
-                    let curSafe = netLumpSum > 0 ? netLumpSum : 0;
-                    let curShortfall = annualShortfall;
-                    for(let i=0; i<=yearsRemaining; i++) {
-                        projectionData.push({ age: currentAge + i, wealth: Math.max(0, curSafe) });
-                        curSafe -= curShortfall;
-                        curShortfall *= (1+inflation);
-                        if(curSafe <= 0) { yearsLast = i; break; }
-                    }
-                } else {
-                    let curInv = investableCapital;
-                    let curSafe = safeBucketTotal;
-                    let curShortfall = annualShortfall;
-                    
-                    for (let i = 0; i <= yearsRemaining + 10; i++) { 
-                        projectionData.push({ 
-                            age: currentAge + i, 
-                            wealth: Math.max(0, curInv + curSafe) 
-                        });
+                let curInv = investableCapital > 0 ? investableCapital : 0;
+                let curSafe = investableCapital > 0 ? safeBucketTotal : (netLumpSum > 0 ? netLumpSum : 0);
+                let curShortfall = annualShortfall;
+                
+                // จำลองการเติบโตและการใช้จ่ายเงินไปเรื่อยๆ จนถึงอายุขัยเป้าหมาย + 10 ปี
+                for (let i = 0; i <= yearsRemaining + 10; i++) { 
+                    projectionData.push({ 
+                        age: currentAge + i, 
+                        wealth: Math.max(0, curInv + curSafe) 
+                    });
 
+                    if (curShortfall === 0) {
+                        // พอร์ตโตอย่างเดียว ไม่มีการถอนเงิน
+                        curInv = curInv * (1 + expectedReturnDec);
+                        yearsLast = 100;
+                    } else {
+                        // ถอนเงินเพื่อใช้จ่าย
                         if (curInv > 0) {
                             curInv = (curInv - curShortfall) * (1 + expectedReturnDec);
                             if (curInv < 0) {
-                                curSafe += curInv; 
+                                curSafe += curInv; // เอาส่วนที่ขาดไปหักออกจาก Safe Bucket
                                 curInv = 0;
                             }
                         } else {
                             curSafe -= curShortfall;
                         }
 
-                        curShortfall *= (1 + inflation);
+                        curShortfall *= (1 + inflation); // เงินเฟ้อทำให้รายจ่ายเพิ่มขึ้น
+                        
                         if (curInv <= 0 && curSafe <= 0) {
-                            yearsLast = i;
+                            if (yearsLast === 0) yearsLast = i; // เก็บค่าอายุที่เงินหมด
                             break;
                         } else {
                             yearsLast = i + 1; 
                         }
                     }
+                }
 
-                    if (annualShortfall === 0 || yearsLast >= yearsRemaining) {
-                        swrStatus = annualShortfall === 0 ? "อิสรภาพทางการเงิน 100% 🌟" : "พอร์ตยั่งยืนและปลอดภัย 🟢";
-                        swrMessage = annualShortfall === 0
-                            ? "รายรับประจำ/บำนาญ ของคุณครอบคลุมรายจ่ายทั้งหมดแล้ว! เงินลงทุนส่วนนี้สามารถจัดพอร์ตให้เติบโตเพื่อเป็นมรดกได้เต็มที่"
-                            : `ผลตอบแทนน่าจะเพียงพอถอนใช้ไปจนถึงอายุ ${currentAge + yearsLast} ปี (ครอบคลุมอายุขัยที่ตั้งเป้า) โดยเอาชนะเงินเฟ้อได้สบายๆ`;
+                // สรุปสถานะพอร์ต
+                if (investableCapital <= 0) {
+                    swrStatus = "เน้นสร้างความปลอดภัยก่อน 🛡️";
+                    swrMessage = netLumpSum > 0 
+                        ? `เงินก้อนที่มีเหมาะสำหรับกันไว้เป็นทุนสำรองฉุกเฉินและสภาพคล่องทั้งหมด แนะนำให้ฝากออมทรัพย์หรือกองทุนตลาดเงิน ไม่ควรนำไปลงทุนเสี่ยง`
+                        : `ปัจจุบันคุณมียอดหนี้สินสูงกว่าเงินก้อนที่มี แนะนำให้โฟกัสที่การปลดหนี้และลดรายจ่ายเป็นอันดับแรกสุด`;
+                    swrClass = "text-amber-600"; swrIcon = "bg-amber-100 border-amber-200";
+                } else if (annualShortfall === 0) {
+                    swrStatus = "อิสรภาพทางการเงิน 100% 🌟";
+                    swrMessage = "รายรับประจำ/บำนาญ ของคุณครอบคลุมรายจ่ายทั้งหมดแล้ว! เงินลงทุนส่วนนี้สามารถจัดพอร์ตให้เติบโตเพื่อเป็นมรดกได้เต็มที่";
+                    swrClass = "text-emerald-600"; swrIcon = "bg-emerald-100 border-emerald-200";
+                } else {
+                    if (yearsLast >= yearsRemaining) {
+                        swrStatus = "พอร์ตยั่งยืนและปลอดภัย 🟢";
+                        swrMessage = `ผลตอบแทนน่าจะเพียงพอถอนใช้ไปจนถึงอายุ ${currentAge + yearsLast} ปี (ครอบคลุมอายุขัยที่ตั้งเป้า) โดยเอาชนะเงินเฟ้อได้สบายๆ`;
                         swrClass = "text-emerald-600"; swrIcon = "bg-emerald-100 border-emerald-200";
                     } else {
                         swrStatus = `เงินอาจหมดตอนอายุ ${currentAge + yearsLast} ปี ⚠️`;
@@ -253,7 +246,7 @@
                     }
                 }
 
-                // 5. Action Plan Logic
+                // 5. Action Plan Logic (ขั้นตอนนำไปปฏิบัติจริง)
                 let actionPlan = [];
                 actionPlan.push({
                     title: "1. แยกถังปลอดภัย (Safe Bucket)",
@@ -264,17 +257,17 @@
                     if (investableCapital > 1000000) {
                         actionPlan.push({
                             title: "2. ทยอยลงทุนถังเติบโต (Investment Bucket)",
-                            desc: `เนื่องจากมีเงินลงทุนค่อนข้างสูง (${formatMoney(investableCapital)}) ไม่แนะนำให้ทุ่มลงทุนก้อนเดียว (Lump Sum) เพื่อป้องกันความเสี่ยงที่ตลาดอาจร่วงหนักในระยะสั้น แนะนำให้ "แบ่งเข้าซื้อ (DCA) เป็น 3-6 ไม้" ทุกๆ เดือน ตามโมเดลพอร์ต ${strategyName} ที่ระบบจัดไว้ให้`
+                            desc: `เนื่องจากมีเงินลงทุนค่อนข้างสูง (${formatMoney(investableCapital)}) ไม่แนะนำให้ทุ่มซื้อก้อนเดียว (Lump Sum) เพื่อป้องกันความเสี่ยง แนะนำให้แบ่งเข้าซื้อ (DCA) จำนวน 3-6 ไม้เท่าๆ กันในแต่ละเดือน ตามโมเดล ${strategyName}`
                         });
                     } else {
                         actionPlan.push({
                             title: "2. ลงทุนถังเติบโต (Investment Bucket)",
-                            desc: `นำเงิน ${formatMoney(investableCapital)} ไปลงทุนจัดพอร์ตตามโมเดล ${strategyName} ได้เลยในครั้งเดียว (Lump Sum) แล้วปล่อยให้ดอกเบี้ยทบต้นทำงาน`
+                            desc: `นำเงินลงทุน ${formatMoney(investableCapital)} ไปจัดพอร์ตตามโมเดล ${strategyName} ได้เลยในครั้งเดียว เพื่อให้ดอกเบี้ยทบต้นเริ่มทำงานทันที`
                         });
                     }
                     actionPlan.push({
                         title: "3. ระบบการถอนเงิน (Withdrawal Rule)",
-                        desc: `เมื่อถึงเวลาต้องใช้เงิน ให้ถอนเงินปันผลหรือขายส่วนกำไรจากพอร์ตลงทุนมาใช้ หากปีไหนเกิดวิกฤตเศรษฐกิจพอร์ตติดลบ ให้หยุดขายหุ้น แล้วหันไปดึงเงินจาก "ถังปลอดภัย" มาใช้แทนชั่วคราว เพื่อรอให้พอร์ตฟื้นตัว`
+                        desc: `เมื่อถึงเวลาต้องใช้เงิน ให้ถอนเงินปันผลหรือขายส่วนกำไรจากพอร์ตลงทุนมาใช้ หากปีไหนเกิดวิกฤตเศรษฐกิจพอร์ตติดลบหนัก ให้หยุดขายหุ้น แล้วหันไปดึงเงินจาก "ถังปลอดภัย" มาใช้แทนชั่วคราว เพื่อรอให้พอร์ตฟื้นตัว`
                     });
                 }
 
@@ -289,7 +282,7 @@
             return (
                 <div className="min-h-screen pb-20">
                     <div className="bg-emerald-600 text-white text-center py-2 text-[10px] md:text-xs font-bold shadow-md">
-                        🔒 ปลอดภัย 100%: ข้อมูลทั้งหมดประมวลผลบนเครื่องของคุณ ไม่มีการบันทึกหรือส่งออกสู่ภายนอก
+                        🔒 ปลอดภัย 100%: ข้อมูลทั้งหมดถูกคำนวณบนอุปกรณ์ของคุณ ไม่มีการส่งข้อมูลออกจากระบบ
                     </div>
 
                     <div className="max-w-3xl mx-auto px-4 pt-8">
@@ -298,7 +291,7 @@
                             <p className="text-slate-500 font-medium text-sm">วางแผนจัดสรรเงินก้อน เพื่อชีวิตเกษียณที่ไร้กังวล</p>
                         </div>
 
-                        {/* Interactive Progress Bar */}
+                        {/* Interactive Progress Bar (สามารถกด Undo/Redo ไปยังข้อที่เคยทำแล้วได้) */}
                         <div className="flex items-center justify-between mb-8 relative px-2">
                             <div className="absolute top-1/2 left-2 right-2 h-1 bg-slate-200 -z-10 transform -translate-y-1/2 rounded"></div>
                             <div className="absolute top-1/2 left-2 h-1 bg-emerald-500 -z-10 transform -translate-y-1/2 rounded transition-all duration-500" style={{width: `calc(${((step-1)/4)*100}% - 4px)`}}></div>
@@ -313,7 +306,7 @@
                                         onClick={() => isClickable && navigateStep(i)}
                                         className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm transition-all border-2 
                                             ${isActive ? 'bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/40 scale-110' : 
-                                              isCompleted ? 'bg-emerald-100 border-emerald-500 text-emerald-600 step-clickable' : 
+                                              isCompleted ? 'bg-emerald-100 border-emerald-500 text-emerald-600 step-clickable hover:bg-emerald-200' : 
                                               isClickable ? 'bg-white border-slate-300 text-slate-600 step-clickable hover:border-emerald-400' : 'bg-white border-slate-200 text-slate-300'}`}
                                         title={isClickable ? `กลับไปหมวด ${i}` : ''}
                                     >
@@ -521,17 +514,17 @@
                                     <div>
                                         <label className="block font-bold text-slate-700 mb-3 text-sm">3. รับความผันผวน (เงินแกว่งไปมา) โดยรวมได้แค่ไหน?</label>
                                         <div className="grid grid-cols-3 gap-2">
-                                            <label className={`flex flex-col items-center text-center gap-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${data.risk === '1' ? 'border-rose-500 bg-rose-50' : 'border-slate-200'}`}>
+                                            <label className={`flex flex-col items-center text-center gap-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${data.risk === '1' ? 'border-rose-500 bg-rose-50' : 'border-slate-200 hover:bg-slate-50'}`}>
                                                 <input type="radio" checked={data.risk === '1'} onChange={() => updateData('risk', '1')} className="hidden" />
                                                 <span className="text-xl">😨</span>
                                                 <span className="font-bold text-[11px] text-slate-700">รับได้ต่ำมาก</span>
                                             </label>
-                                            <label className={`flex flex-col items-center text-center gap-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${data.risk === '2' ? 'border-amber-500 bg-amber-50' : 'border-slate-200'}`}>
+                                            <label className={`flex flex-col items-center text-center gap-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${data.risk === '2' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 hover:bg-slate-50'}`}>
                                                 <input type="radio" checked={data.risk === '2'} onChange={() => updateData('risk', '2')} className="hidden" />
                                                 <span className="text-xl">🤔</span>
                                                 <span className="font-bold text-[11px] text-slate-700">รับได้ปานกลาง</span>
                                             </label>
-                                            <label className={`flex flex-col items-center text-center gap-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${data.risk === '3' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}`}>
+                                            <label className={`flex flex-col items-center text-center gap-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${data.risk === '3' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'}`}>
                                                 <input type="radio" checked={data.risk === '3'} onChange={() => updateData('risk', '3')} className="hidden" />
                                                 <span className="text-xl">😎</span>
                                                 <span className="font-bold text-[11px] text-slate-700">ใจนิ่งรับได้สูง</span>
@@ -592,35 +585,29 @@
                                         {analysis.swrMessage}
                                     </p>
 
-                                    {/* Projection Chart - Fallback ถ้าระบบ Recharts พัง */}
+                                    {/* Projection Chart */}
                                     <div className="bg-white rounded-xl p-4 border border-slate-200/50 shadow-inner">
                                         <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 text-center">📈 กราฟจำลองมูลค่าความมั่งคั่งตามอายุ (Wealth Projection)</h3>
                                         <div className="h-48 w-full">
-                                            {!window.Recharts ? (
-                                                <div className="h-full w-full flex items-center justify-center text-slate-500 text-xs text-center border-2 border-dashed border-slate-200 rounded-lg bg-slate-50">
-                                                    ⚠️ ไม่สามารถโหลดไลบรารีกราฟได้<br/>กรุณารีเฟรชหน้าจอใหม่ครับ
-                                                </div>
-                                            ) : (
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <AreaChart data={analysis.projectionData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                                                        <defs>
-                                                            <linearGradient id="colorWealth" x1="0" y1="0" x2="0" y2="1">
-                                                                <stop offset="5%" stopColor={analysis.swrClass.includes('rose') ? '#f43f5e' : '#10b981'} stopOpacity={0.4}/>
-                                                                <stop offset="95%" stopColor={analysis.swrClass.includes('rose') ? '#f43f5e' : '#10b981'} stopOpacity={0}/>
-                                                            </linearGradient>
-                                                        </defs>
-                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                                        <XAxis dataKey="age" tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(val) => 'อายุ '+val} axisLine={false} tickLine={false} />
-                                                        <YAxis tickFormatter={(val) => (val/1000000).toFixed(1)+'M'} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                                                        <Tooltip 
-                                                            formatter={(value) => [formatMoney(value), "มูลค่าคงเหลือ"]} 
-                                                            labelFormatter={(label) => `อายุ ${label} ปี`}
-                                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
-                                                        />
-                                                        <Area type="monotone" dataKey="wealth" stroke={analysis.swrClass.includes('rose') ? '#e11d48' : '#059669'} strokeWidth={2} fillOpacity={1} fill="url(#colorWealth)" />
-                                                    </AreaChart>
-                                                </ResponsiveContainer>
-                                            )}
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={analysis.projectionData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                                                    <defs>
+                                                        <linearGradient id="colorWealth" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor={analysis.swrClass.includes('rose') ? '#f43f5e' : '#10b981'} stopOpacity={0.4}/>
+                                                            <stop offset="95%" stopColor={analysis.swrClass.includes('rose') ? '#f43f5e' : '#10b981'} stopOpacity={0}/>
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                                    <XAxis dataKey="age" tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(val) => 'อายุ '+val} axisLine={false} tickLine={false} />
+                                                    <YAxis tickFormatter={(val) => (val/1000000).toFixed(1)+'M'} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                                                    <Tooltip 
+                                                        formatter={(value) => [formatMoney(value), "มูลค่าคงเหลือ"]} 
+                                                        labelFormatter={(label) => `อายุ ${label} ปี`}
+                                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
+                                                    />
+                                                    <Area type="monotone" dataKey="wealth" stroke={analysis.swrClass.includes('rose') ? '#e11d48' : '#059669'} strokeWidth={2} fillOpacity={1} fill="url(#colorWealth)" />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
                                         </div>
                                     </div>
                                 </div>
@@ -680,30 +667,22 @@
                                         <p className="text-sm text-slate-500 mb-6">วิเคราะห์จากระดับความเสี่ยงและประสบการณ์ของคุณ: <strong className="text-emerald-600">{analysis.strategyName}</strong></p>
                                         
                                         <div className="flex flex-col md:flex-row items-center gap-8 mb-6">
-                                            {/* Graph with Center Text - Fallback ถ้าระบบ Recharts พัง */}
+                                            {/* Graph with Center Text */}
                                             <div className="w-full md:w-1/2 h-56 relative">
-                                                {!window.Recharts ? (
-                                                    <div className="h-full w-full flex items-center justify-center text-slate-500 text-xs text-center border-2 border-dashed border-slate-200 rounded-lg bg-slate-50">
-                                                        ⚠️ ไม่สามารถโหลดไลบรารีกราฟได้
-                                                    </div>
-                                                ) : (
-                                                    <ResponsiveContainer width="100%" height="100%">
-                                                        <PieChart>
-                                                            <Pie data={analysis.portfolio} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={5} dataKey="value">
-                                                                {analysis.portfolio.map((entry, index) => (
-                                                                    <Cell key={`cell-${index}`} fill={entry.color} />
-                                                                ))}
-                                                            </Pie>
-                                                            <Tooltip formatter={(value) => formatMoney(value)} />
-                                                        </PieChart>
-                                                    </ResponsiveContainer>
-                                                )}
-                                                {window.Recharts && (
-                                                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                                        <span className="text-xs text-slate-500 font-bold">ลงทุนจริง</span>
-                                                        <span className="font-black text-slate-800 text-lg">{formatShort(analysis.investableCapital)}</span>
-                                                    </div>
-                                                )}
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <PieChart>
+                                                        <Pie data={analysis.portfolio} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={5} dataKey="value">
+                                                            {analysis.portfolio.map((entry, index) => (
+                                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                                            ))}
+                                                        </Pie>
+                                                        <Tooltip formatter={(value) => formatMoney(value)} />
+                                                    </PieChart>
+                                                </ResponsiveContainer>
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                                    <span className="text-xs text-slate-500 font-bold">ลงทุนจริง</span>
+                                                    <span className="font-black text-slate-800 text-lg">{formatShort(analysis.investableCapital)}</span>
+                                                </div>
                                             </div>
                                             
                                             {/* Breakdown */}
@@ -761,7 +740,7 @@
             );
         }
 
-        // 🛡️ Error Boundary เพื่อดักจับทุก Error ที่ทำให้จอขาว
+        // 🛡️ Error Boundary เพื่อดักจับข้อผิดพลาด (โชว์ข้อความให้เห็นแทนที่จะเป็นจอขาว)
         class ErrorBoundary extends React.Component {
             constructor(props) {
                 super(props);
