@@ -24,6 +24,10 @@
         input[type=number]::-webkit-inner-spin-button, 
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
+        
+        /* สไตล์สำหรับปุ่ม Progress ที่กดได้ */
+        .step-clickable { cursor: pointer; transition: transform 0.2s; }
+        .step-clickable:hover { transform: scale(1.1); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
     </style>
 </head>
 <body>
@@ -31,7 +35,7 @@
 
     <script type="text/babel">
         const { useState, useMemo, useEffect, useRef } = React;
-        const { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } = window.Recharts;
+        const { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } = window.Recharts;
 
         // --- Utility ---
         const formatMoney = (amount) => "฿" + Math.round(Number(amount) || 0).toLocaleString("th-TH");
@@ -44,6 +48,7 @@
 
         function App() {
             const [step, setStep] = useState(1);
+            const [highestStep, setHighestStep] = useState(1); // Tracker สำหรับเปิดให้คลิกย้อนกลับ/เดินหน้า
             
             // --- State: เก็บข้อมูลทั้งหมด ---
             const [data, setData] = useState({
@@ -51,7 +56,8 @@
                 income: "", totalDebt: "", lumpSum: "",
                 essentialExp: "", discretionaryExp: "", largeExp: "", inflation: "3",
                 healthCover: "partial", healthConcern: "low",
-                risk: "low", goal: "protect"
+                // Risk Metrics (ปรับใหม่ให้ละเอียดขึ้น)
+                experience: "1", reaction: "2", risk: "1", goal: "1"
             });
 
             const updateData = (field, value) => setData(prev => ({ ...prev, [field]: value }));
@@ -65,18 +71,36 @@
                 }
             };
 
-            const nextStep = () => { window.scrollTo({ top: 0, behavior: 'smooth' }); setStep(s => Math.min(s + 1, 5)); };
-            const prevStep = () => { window.scrollTo({ top: 0, behavior: 'smooth' }); setStep(s => Math.max(s - 1, 1)); };
+            const navigateStep = (targetStep) => {
+                if (targetStep <= highestStep) {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    setStep(targetStep);
+                }
+            };
+
+            const nextStep = () => { 
+                window.scrollTo({ top: 0, behavior: 'smooth' }); 
+                const next = Math.min(step + 1, 5);
+                setStep(next);
+                setHighestStep(prev => Math.max(prev, next));
+            };
+            const prevStep = () => { 
+                window.scrollTo({ top: 0, behavior: 'smooth' }); 
+                setStep(s => Math.max(s - 1, 1)); 
+            };
+            
             const resetApp = () => { 
                 setStep(1); 
+                setHighestStep(1);
                 setData({ 
                     currentAge: "60", expectAge: "85", income: "", totalDebt: "", lumpSum: "", 
                     essentialExp: "", discretionaryExp: "", largeExp: "", inflation: "3", 
-                    healthCover: "partial", healthConcern: "low", risk: "low", goal: "protect" 
+                    healthCover: "partial", healthConcern: "low", 
+                    experience: "1", reaction: "2", risk: "1", goal: "1" 
                 }); 
             };
 
-            // --- Algorithm: The Bucket Strategy & Safe Withdrawal Rate ---
+            // --- Algorithm: The Bucket Strategy, Risk Scoring & Projection ---
             const analysis = useMemo(() => {
                 if (step !== 5) return null;
 
@@ -93,16 +117,14 @@
                 const discretionaryExp = parseNum(data.discretionaryExp);
                 const largeExp = parseNum(data.largeExp);
                 
-                // 1. Debt Clearance Logic
+                // 1. Debt Clearance & Cashflow Logic
                 const netLumpSum = lumpSum - totalDebt;
-
-                // 2. Cashflow Calculation
                 const totalMonthlyExp = essentialExp + discretionaryExp;
                 let monthlyShortfall = totalMonthlyExp - income;
-                if (monthlyShortfall < 0) monthlyShortfall = 0; // มีรายรับเหลือเฟือ
+                if (monthlyShortfall < 0) monthlyShortfall = 0; 
                 const annualShortfall = monthlyShortfall * 12;
 
-                // 3. Safe Bucket (หักเฉพาะหนี้ที่จะไม่โปะ หรือค่ากินอยู่ 12 เดือน)
+                // 2. Safe Bucket
                 const livingReserve = essentialExp * 12; 
                 let healthBuffer = 0;
                 if (data.healthCover === 'none') healthBuffer = 500000;
@@ -112,45 +134,49 @@
                 const safeBucketTotal = livingReserve + healthBuffer + largeExp;
                 const investableCapital = netLumpSum - safeBucketTotal;
 
-                // 4. Portfolio Allocation (Scoring Logic)
-                const riskScore = data.risk === 'low' ? 1 : (data.risk === 'medium' ? 2 : 3);
-                const goalScore = data.goal === 'protect' ? 1 : (data.goal === 'cashflow' ? 2 : 3);
-                const totalScore = riskScore + goalScore;
+                // 3. Advanced Risk Scoring (4-12 points)
+                const scoreEx = parseInt(data.experience);
+                const scoreRe = parseInt(data.reaction);
+                const scoreRi = parseInt(data.risk);
+                const scoreGo = parseInt(data.goal);
+                const totalScore = scoreEx + scoreRe + scoreRi + scoreGo;
 
                 let strategyName, expectedReturn, expectedReturnDec, portfolio;
                 
-                if (totalScore <= 3) {
+                // Logic จัดพอร์ตตามความเสี่ยงรวม
+                if (totalScore <= 6) { // Conservative (4-6)
                     strategyName = "พอร์ตปกป้องเงินต้น (Conservative)";
-                    expectedReturn = "3 - 4% ต่อปี"; expectedReturnDec = 0.035;
+                    expectedReturn = "3.5% ต่อปี"; expectedReturnDec = 0.035;
                     portfolio = [
-                        { name: 'เงินฝาก / กองทุนตลาดเงิน (เช่น K-CASH)', value: investableCapital * 0.30, color: '#94a3b8' },
-                        { name: 'พันธบัตรรัฐบาลไทย (เช่น B-TREASURY)', value: investableCapital * 0.60, color: '#3b82f6' },
-                        { name: 'กองทุนหุ้นผันผวนต่ำ (เช่น TMBGQG)', value: investableCapital * 0.10, color: '#10b981' }
+                        { name: 'เงินฝาก / กองทุนตลาดเงิน', value: investableCapital * 0.30, color: '#94a3b8' },
+                        { name: 'พันธบัตรรัฐบาล / หุ้นกู้เรทติ้งสูง', value: investableCapital * 0.60, color: '#3b82f6' },
+                        { name: 'กองทุนหุ้นโลกความผันผวนต่ำ', value: investableCapital * 0.10, color: '#10b981' }
                     ];
-                } else if (totalScore <= 4) {
-                    strategyName = "พอร์ตเน้นกระแสเงินสด (Income/Moderate)";
-                    expectedReturn = "4 - 6% ต่อปี"; expectedReturnDec = 0.05;
+                } else if (totalScore <= 9) { // Moderate (7-9)
+                    strategyName = "พอร์ตกระแสเงินสดและเติบโต (Moderate)";
+                    expectedReturn = "5.5% ต่อปี"; expectedReturnDec = 0.055;
                     portfolio = [
-                        { name: 'ตราสารหนี้เอกชนชั้นดี (เช่น K-FIXED)', value: investableCapital * 0.40, color: '#3b82f6' },
-                        { name: 'หุ้นปันผล / โครงสร้างพื้นฐาน (เช่น T-PREMIUM)', value: investableCapital * 0.40, color: '#8b5cf6' },
-                        { name: 'ทรัสต์อสังหาฯ REITs (เช่น PRINCIPAL iPROP)', value: investableCapital * 0.20, color: '#f59e0b' }
+                        { name: 'ตราสารหนี้เอกชนชั้นดี (Corporate Bonds)', value: investableCapital * 0.30, color: '#3b82f6' },
+                        { name: 'หุ้นปันผล / โครงสร้างพื้นฐาน / REITs', value: investableCapital * 0.40, color: '#8b5cf6' },
+                        { name: 'ดัชนีหุ้นโลก (Global Equity)', value: investableCapital * 0.30, color: '#10b981' }
                     ];
-                } else {
-                    strategyName = "พอร์ตเติบโตเพื่ออนาคต (Growth)";
-                    expectedReturn = "6 - 8% ต่อปี"; expectedReturnDec = 0.07;
+                } else { // Growth (10-12)
+                    strategyName = "พอร์ตเติบโตเพื่อเป็นมรดก (Growth)";
+                    expectedReturn = "7.5% ต่อปี"; expectedReturnDec = 0.075;
                     portfolio = [
-                        { name: 'ตราสารหนี้ลดความผันผวน (เช่น K-FIXED)', value: investableCapital * 0.30, color: '#3b82f6' },
-                        { name: 'ดัชนีหุ้นโลก S&P500 / Global (เช่น KFGBRAND)', value: investableCapital * 0.60, color: '#10b981' },
-                        { name: 'สินทรัพย์ทางเลือก ทองคำ (เช่น SCBGOLD)', value: investableCapital * 0.10, color: '#f59e0b' }
+                        { name: 'ตราสารหนี้ (ลดความผันผวนของพอร์ต)', value: investableCapital * 0.20, color: '#3b82f6' },
+                        { name: 'ดัชนีหุ้นโลก และ หุ้นกลุ่มเติบโต', value: investableCapital * 0.70, color: '#10b981' },
+                        { name: 'สินทรัพย์ทางเลือก (เช่น ทองคำ)', value: investableCapital * 0.10, color: '#f59e0b' }
                     ];
                 }
 
-                // 5. Survival Check (SWR) Algorithm
+                // 4. Survival Check & Projection Chart Data
                 let swrStatus = "";
                 let swrMessage = "";
                 let swrClass = "";
                 let swrIcon = "";
                 let yearsLast = 0;
+                let projectionData = [];
 
                 if (investableCapital <= 0) {
                     swrStatus = "เน้นสร้างความปลอดภัยก่อน 🛡️";
@@ -158,104 +184,136 @@
                         ? `เงินก้อนที่มีเหมาะสำหรับกันไว้เป็นทุนสำรองฉุกเฉินและสภาพคล่องทั้งหมด แนะนำให้ฝากออมทรัพย์หรือกองทุนตลาดเงิน ไม่ควรนำไปลงทุนเสี่ยง`
                         : `ปัจจุบันคุณมียอดหนี้สินสูงกว่าเงินก้อนที่มี แนะนำให้โฟกัสที่การปลดหนี้และลดรายจ่ายเป็นอันดับแรกสุด`;
                     swrClass = "text-amber-600"; swrIcon = "bg-amber-100 border-amber-200";
-                } else if (annualShortfall === 0) {
-                    swrStatus = "อิสรภาพทางการเงิน 100% 🌟";
-                    swrMessage = "รายรับประจำ/บำนาญ ของคุณครอบคลุมรายจ่ายทั้งหมดแล้ว! เงินลงทุนส่วนนี้สามารถจัดพอร์ตให้เติบโตเพื่อเป็นมรดกได้เต็มที่";
-                    swrClass = "text-emerald-600"; swrIcon = "bg-emerald-100 border-emerald-200";
-                    yearsLast = 100;
-                } else {
-                    // หาว่าเงินจะหมดในกี่ปี
-                    let balance = investableCapital;
-                    let currentWithdrawal = annualShortfall;
                     
-                    while (balance > 0 && yearsLast < 100) {
-                        balance = (balance - currentWithdrawal) * (1 + expectedReturnDec);
-                        currentWithdrawal *= (1 + inflation);
-                        yearsLast++;
+                    // สร้างกราฟจำลองการใช้เงินสำรอง
+                    let curSafe = netLumpSum > 0 ? netLumpSum : 0;
+                    let curShortfall = annualShortfall;
+                    for(let i=0; i<=yearsRemaining; i++) {
+                        projectionData.push({ age: currentAge + i, wealth: Math.max(0, curSafe) });
+                        curSafe -= curShortfall;
+                        curShortfall *= (1+inflation);
+                        if(curSafe <= 0) { yearsLast = i; break; }
+                    }
+                } else {
+                    let curInv = investableCapital;
+                    let curSafe = safeBucketTotal;
+                    let curShortfall = annualShortfall;
+                    
+                    for (let i = 0; i <= yearsRemaining + 10; i++) { // จำลองเผื่ออายุเกิน
+                        projectionData.push({ 
+                            age: currentAge + i, 
+                            wealth: Math.max(0, curInv + curSafe) 
+                        });
+
+                        // สมมติฐาน: ถอนจากพอร์ตลงทุนที่เติบโตก่อน ถ้าหมดค่อยกินเงินสำรอง
+                        if (curInv > 0) {
+                            curInv = (curInv - curShortfall) * (1 + expectedReturnDec);
+                            if (curInv < 0) {
+                                curSafe += curInv; // เอาส่วนที่ขาดไปหักจาก Safe
+                                curInv = 0;
+                            }
+                        } else {
+                            curSafe -= curShortfall;
+                        }
+
+                        curShortfall *= (1 + inflation);
+                        if (curInv <= 0 && curSafe <= 0) {
+                            yearsLast = i;
+                            break;
+                        } else {
+                            yearsLast = i + 1; // นับปีที่ยังรอด
+                        }
                     }
 
-                    if (yearsLast >= yearsRemaining) {
-                        swrStatus = "พอร์ตยั่งยืนและปลอดภัย 🟢";
-                        swrMessage = `ผลตอบแทนน่าจะเพียงพอถอนใช้ไปอีก ${yearsLast} ปี (ครอบคลุมอายุขัยที่ตั้งไว้) โดยเอาชนะเงินเฟ้อได้สบายๆ`;
+                    if (annualShortfall === 0 || yearsLast >= yearsRemaining) {
+                        swrStatus = annualShortfall === 0 ? "อิสรภาพทางการเงิน 100% 🌟" : "พอร์ตยั่งยืนและปลอดภัย 🟢";
+                        swrMessage = annualShortfall === 0
+                            ? "รายรับประจำ/บำนาญ ของคุณครอบคลุมรายจ่ายทั้งหมดแล้ว! เงินลงทุนส่วนนี้สามารถจัดพอร์ตให้เติบโตเพื่อเป็นมรดกได้เต็มที่"
+                            : `ผลตอบแทนน่าจะเพียงพอถอนใช้ไปจนถึงอายุ ${currentAge + yearsLast} ปี (ครอบคลุมอายุขัยที่ตั้งเป้า) โดยเอาชนะเงินเฟ้อได้สบายๆ`;
                         swrClass = "text-emerald-600"; swrIcon = "bg-emerald-100 border-emerald-200";
                     } else {
-                        swrStatus = `เงินก้อนนี้อาจหมดใน ${yearsLast} ปี ⚠️`;
-                        swrMessage = `ผลตอบแทนอาจไม่พอครอบคลุมรายจ่ายที่เติบโตตามเงินเฟ้อ แนะนำให้: 1) ปรับลดรายจ่ายลง 2) หาช่องทางรายได้เสริม หรือ 3) เลื่อนอายุเกษียณออกไป`;
+                        swrStatus = `เงินอาจหมดตอนอายุ ${currentAge + yearsLast} ปี ⚠️`;
+                        swrMessage = `ผลตอบแทนอาจไม่พอครอบคลุมรายจ่ายที่เติบโตตามเงินเฟ้อ แนะนำให้: 1) ปรับลดรายจ่าย 2) หารายได้เสริม หรือ 3) เลื่อนอายุเกษียณ`;
                         swrClass = "text-rose-600"; swrIcon = "bg-rose-100 border-rose-200";
                     }
+                }
+
+                // 5. Action Plan Logic
+                let actionPlan = [];
+                actionPlan.push({
+                    title: "1. แยกถังปลอดภัย (Safe Bucket)",
+                    desc: `แยกเงินจำนวน ${formatMoney(safeBucketTotal)} ไปไว้ในบัญชีออมทรัพย์ดอกเบี้ยสูง กองทุนตลาดเงิน หรือสลากออมสิน เพื่อให้ถอนใช้จ่ายรายวันและยามฉุกเฉินได้ทันที โดยไม่ต้องกังวลว่าตลาดหุ้นจะตก`
+                });
+
+                if (investableCapital > 0) {
+                    if (investableCapital > 1000000) {
+                        actionPlan.push({
+                            title: "2. ทยอยลงทุนถังเติบโต (Investment Bucket)",
+                            desc: `เนื่องจากมีเงินลงทุนค่อนข้างสูง (${formatMoney(investableCapital)}) ไม่แนะนำให้ทุ่มลงทุนก้อนเดียว (Lump Sum) เพื่อป้องกันความเสี่ยงที่ตลาดอาจร่วงหนักในระยะสั้น แนะนำให้ "แบ่งเข้าซื้อ (DCA) เป็น 3-6 ไม้" ทุกๆ เดือน ตามโมเดลพอร์ต ${strategyName} ที่ระบบจัดไว้ให้`
+                        });
+                    } else {
+                        actionPlan.push({
+                            title: "2. ลงทุนถังเติบโต (Investment Bucket)",
+                            desc: `นำเงิน ${formatMoney(investableCapital)} ไปลงทุนจัดพอร์ตตามโมเดล ${strategyName} ได้เลยในครั้งเดียว (Lump Sum) แล้วปล่อยให้ดอกเบี้ยทบต้นทำงาน`
+                        });
+                    }
+                    actionPlan.push({
+                        title: "3. ระบบการถอนเงิน (Withdrawal Rule)",
+                        desc: `เมื่อถึงเวลาต้องใช้เงิน ให้ถอนเงินปันผลหรือขายส่วนกำไรจากพอร์ตลงทุนมาใช้ หากปีไหนเกิดวิกฤตเศรษฐกิจพอร์ตติดลบ ให้หยุดขายหุ้น แล้วหันไปดึงเงินจาก "ถังปลอดภัย" มาใช้แทนชั่วคราว เพื่อรอให้พอร์ตฟื้นตัว`
+                    });
                 }
 
                 return {
                     yearsRemaining, netLumpSum, monthlyShortfall, annualShortfall,
                     livingReserve, healthBuffer, largeExp, safeBucketTotal, investableCapital, totalDebt,
                     strategyName, expectedReturn, expectedReturnDec, portfolio, inflation,
-                    swrStatus, swrMessage, swrClass, swrIcon, yearsLast
+                    swrStatus, swrMessage, swrClass, swrIcon, yearsLast, projectionData, actionPlan
                 };
             }, [step, data]);
-
-            // --- คัดลอกสรุปแผน ---
-            const copyPlan = () => {
-                if (!analysis) return;
-                let text = `🎯 สรุปแผนเกษียณ RetireSafe\n\n`;
-                text += `👤 อายุ: ${data.currentAge} ปี (ตั้งเป้าอายุขัย: ${data.expectAge} ปี)\n`;
-                text += `💼 เงินก้อนที่มีเพื่อจัดสรร: ${formatMoney(analysis.netLumpSum)} (หลังหักหนี้)\n`;
-                text += `🔻 รายจ่ายที่ยังขาด (Shortfall): ${formatMoney(analysis.monthlyShortfall)} / เดือน\n\n`;
-                
-                text += `🪣 ถังที่ 1: สภาพคล่องและฉุกเฉิน (Safe Bucket)\n`;
-                text += `   มูลค่า: ${formatMoney(analysis.safeBucketTotal)}\n\n`;
-                
-                if (analysis.investableCapital > 0) {
-                    text += `📈 ถังที่ 2: การลงทุน (Investment Bucket)\n`;
-                    text += `   มูลค่า: ${formatMoney(analysis.investableCapital)}\n`;
-                    text += `   โมเดล: ${analysis.strategyName}\n`;
-                    text += `   ผลตอบแทนคาดหวัง: ${analysis.expectedReturn}\n\n`;
-                }
-
-                text += `💡 สถานะพอร์ต: ${analysis.swrStatus}\n`;
-                text += `   ${analysis.swrMessage}\n\n`;
-                text += `ลองประเมินแผนของคุณได้ที่ RetireSafe Simulator`;
-
-                navigator.clipboard.writeText(text).then(() => {
-                    const btn = document.getElementById('btnCopyPlan');
-                    const orig = btn.innerHTML;
-                    btn.innerHTML = '✅ คัดลอกสำเร็จ!';
-                    btn.classList.replace('bg-slate-800', 'bg-emerald-600');
-                    setTimeout(() => {
-                        btn.innerHTML = orig;
-                        btn.classList.replace('bg-emerald-600', 'bg-slate-800');
-                    }, 2000);
-                });
-            };
 
             // --- UI Components ---
             return (
                 <div className="min-h-screen pb-20">
                     <div className="bg-emerald-600 text-white text-center py-2 text-[10px] md:text-xs font-bold shadow-md">
-                        🔒 ปลอดภัย 100%: ข้อมูลทั้งหมดถูกคำนวณบนอุปกรณ์ของคุณ ไม่มีการส่งข้อมูลออกจากระบบ
+                        🔒 ปลอดภัย 100%: ข้อมูลทั้งหมดประมวลผลบนเครื่องของคุณ ไม่มีการบันทึกหรือส่งออกสู่ภายนอก
                     </div>
 
                     <div className="max-w-3xl mx-auto px-4 pt-8">
                         <div className="text-center mb-8">
                             <h1 className="text-3xl font-black text-slate-800 mb-2">Retire<span className="text-emerald-600">Safe</span> 🛡️</h1>
-                            <p className="text-slate-500 font-medium text-sm">ออกแบบการจัดสรรเงินก้อนวัยเกษียณ ให้เงินไม่หมด</p>
+                            <p className="text-slate-500 font-medium text-sm">วางแผนจัดสรรเงินก้อน เพื่อชีวิตเกษียณที่ไร้กังวล</p>
                         </div>
 
-                        {/* Progress Bar */}
-                        <div className="flex items-center justify-between mb-8 relative">
-                            <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-200 -z-10 transform -translate-y-1/2 rounded"></div>
-                            <div className="absolute top-1/2 left-0 h-1 bg-emerald-500 -z-10 transform -translate-y-1/2 rounded transition-all duration-500" style={{width: `${((step-1)/4)*100}%`}}></div>
-                            {[1, 2, 3, 4, 5].map(i => (
-                                <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-all border-2 ${step >= i ? 'bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/30' : 'bg-white border-slate-300 text-slate-400'}`}>
-                                    {i === 5 ? '🏁' : i}
-                                </div>
-                            ))}
+                        {/* Interactive Progress Bar */}
+                        <div className="flex items-center justify-between mb-8 relative px-2">
+                            <div className="absolute top-1/2 left-2 right-2 h-1 bg-slate-200 -z-10 transform -translate-y-1/2 rounded"></div>
+                            <div className="absolute top-1/2 left-2 h-1 bg-emerald-500 -z-10 transform -translate-y-1/2 rounded transition-all duration-500" style={{width: `calc(${((step-1)/4)*100}% - 4px)`}}></div>
+                            {[1, 2, 3, 4, 5].map(i => {
+                                const isClickable = i <= highestStep;
+                                const isActive = step === i;
+                                const isCompleted = i < step;
+                                
+                                return (
+                                    <div 
+                                        key={i} 
+                                        onClick={() => isClickable && navigateStep(i)}
+                                        className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm transition-all border-2 
+                                            ${isActive ? 'bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/40 scale-110' : 
+                                              isCompleted ? 'bg-emerald-100 border-emerald-500 text-emerald-600 step-clickable' : 
+                                              isClickable ? 'bg-white border-slate-300 text-slate-600 step-clickable hover:border-emerald-400' : 'bg-white border-slate-200 text-slate-300'}`}
+                                        title={isClickable ? `กลับไปหมวด ${i}` : ''}
+                                    >
+                                        {i === 5 ? '🏁' : (isCompleted && !isActive ? '✓' : i)}
+                                    </div>
+                                );
+                            })}
                         </div>
 
                         {/* --- STEP 1: สถานะการเงิน --- */}
                         {step === 1 && (
                             <div className="bg-white rounded-3xl p-6 md:p-10 shadow-xl shadow-slate-200/50 border border-slate-100 fade-in">
                                 <h2 className="text-2xl font-black text-slate-800 mb-2">หมวด 1: ข้อมูลตั้งต้น 💰</h2>
-                                <p className="text-slate-500 text-sm mb-6">เพื่อประเมินว่าคุณต้องเตรียมตัวสำหรับกี่ปี</p>
+                                <p className="text-slate-500 text-sm mb-6">เพื่อประเมินระยะเวลาสายป่านที่คุณต้องเตรียมการ</p>
                                 
                                 <div className="space-y-5">
                                     <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
@@ -264,21 +322,21 @@
                                             <input type="number" value={data.currentAge} onChange={handleNumberInput('currentAge')} className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl focus:border-emerald-500 outline-none text-lg font-bold" />
                                         </div>
                                         <div>
-                                            <label className="block font-bold text-slate-700 mb-1 text-sm">คาดหวังอายุขัย</label>
+                                            <label className="block font-bold text-slate-700 mb-1 text-sm">อายุขัย (เป้าหมาย)</label>
                                             <input type="number" value={data.expectAge} onChange={handleNumberInput('expectAge')} className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl focus:border-emerald-500 outline-none text-lg font-bold" />
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="block font-bold text-slate-700 mb-1">รายรับต่อเดือนที่จะได้หลังเกษียณ (บาท/เดือน)</label>
-                                        <p className="text-[11px] text-slate-400 mb-2">เช่น บำนาญชราภาพ, ประกันสังคม, ค่าเช่า (ถ้าไม่มีใส่ 0)</p>
+                                        <label className="block font-bold text-slate-700 mb-1">รายรับต่อเดือนที่จะได้หลังเกษียณ (บาท)</label>
+                                        <p className="text-[11px] text-slate-400 mb-2">เช่น บำนาญ, ประกันสังคม, ค่าเช่ารับ (ถ้าไม่มีใส่ 0)</p>
                                         <div className="relative">
                                             <span className="absolute left-4 top-4 text-slate-400 font-bold">฿</span>
                                             <input type="text" inputMode="numeric" value={data.income} onChange={handleNumberInput('income')} className="w-full pl-10 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:border-emerald-500 outline-none text-xl font-bold transition-all" placeholder="0" />
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="block font-bold text-slate-700 mb-1">ยอดหนี้สินคงค้างทั้งหมด (บาท)</label>
-                                        <p className="text-[11px] text-slate-400 mb-2">หนี้ที่ตั้งใจจะหักออกจากเงินก้อนเพื่อปลดภาระทันที (ถ้าไม่มีใส่ 0)</p>
+                                        <label className="block font-bold text-slate-700 mb-1">หนี้สินคงค้างที่ตั้งใจจะโปะปิด (บาท)</label>
+                                        <p className="text-[11px] text-slate-400 mb-2">ระบบจะหักหนี้ก้อนนี้ออกจากเงินก้อนทันที เพื่อประเมินเงินลงทุนสุทธิ</p>
                                         <div className="relative">
                                             <span className="absolute left-4 top-4 text-slate-400 font-bold">฿</span>
                                             <input type="text" inputMode="numeric" value={data.totalDebt} onChange={handleNumberInput('totalDebt')} className="w-full pl-10 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:border-emerald-500 outline-none text-xl font-bold transition-all" placeholder="0" />
@@ -286,7 +344,7 @@
                                     </div>
                                     <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100">
                                         <label className="block font-bold text-emerald-800 mb-1">"เงินก้อน" สำหรับจัดสรร (บาท) ⭐</label>
-                                        <p className="text-[11px] text-emerald-600 mb-2">เช่น เงินก้อนเกษียณ, กบข., Provident Fund (ไม่รวมมูลค่าบ้านที่อยู่อาศัย)</p>
+                                        <p className="text-[11px] text-emerald-600 mb-2">เช่น เงินก้อนเกษียณ, กบข., กองทุน (ไม่รวมบ้าน/รถที่ขายยาก)</p>
                                         <div className="relative">
                                             <span className="absolute left-4 top-3.5 text-emerald-600 font-bold text-xl">฿</span>
                                             <input type="text" inputMode="numeric" value={data.lumpSum} onChange={handleNumberInput('lumpSum')} className="w-full pl-10 pr-4 py-3 bg-white border-2 border-emerald-200 rounded-xl focus:border-emerald-500 outline-none text-2xl font-black text-emerald-700 transition-all shadow-inner" placeholder="เช่น 5,000,000" />
@@ -301,12 +359,12 @@
                         {step === 2 && (
                             <div className="bg-white rounded-3xl p-6 md:p-10 shadow-xl shadow-slate-200/50 border border-slate-100 fade-in">
                                 <h2 className="text-2xl font-black text-slate-800 mb-2">หมวด 2: ค่าใช้จ่าย & เงินเฟ้อ 🛒</h2>
-                                <p className="text-slate-500 text-sm mb-8">เพื่อประเมินเงินที่ต้องใช้ในแต่ละเดือน และรับมือกับของแพง</p>
+                                <p className="text-slate-500 text-sm mb-8">ประเมินเงินที่คุณต้องใช้ต่อเดือน และรับมือกับของแพง</p>
                                 
                                 <div className="space-y-6">
                                     <div>
                                         <label className="block font-bold text-slate-700 mb-1">ค่าใช้จ่ายจำเป็น (บาท/เดือน)</label>
-                                        <p className="text-xs text-slate-400 mb-2">เช่น ค่าอาหาร, ค่าน้ำไฟ, ของใช้, ส่วนกลาง (ขาดไม่ได้)</p>
+                                        <p className="text-xs text-slate-400 mb-2">เช่น อาหาร, น้ำไฟ, ของใช้พื้นฐาน (ขาดไม่ได้)</p>
                                         <div className="relative">
                                             <span className="absolute left-4 top-4 text-slate-400 font-bold">฿</span>
                                             <input type="text" inputMode="numeric" value={data.essentialExp} onChange={handleNumberInput('essentialExp')} className="w-full pl-10 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:border-emerald-500 outline-none text-xl font-bold" placeholder="0" />
@@ -314,15 +372,15 @@
                                     </div>
                                     <div>
                                         <label className="block font-bold text-slate-700 mb-1">ค่าความสุข/ท่องเที่ยว (บาท/เดือน)</label>
-                                        <p className="text-xs text-slate-400 mb-2">เช่น ทานข้าวนอกบ้าน, งานอดิเรก, ใส่ซองงานแต่ง</p>
+                                        <p className="text-xs text-slate-400 mb-2">เช่น ทานข้าวนอกบ้าน, งานบุญ, ให้ลูกหลาน</p>
                                         <div className="relative">
                                             <span className="absolute left-4 top-4 text-slate-400 font-bold">฿</span>
                                             <input type="text" inputMode="numeric" value={data.discretionaryExp} onChange={handleNumberInput('discretionaryExp')} className="w-full pl-10 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:border-emerald-500 outline-none text-xl font-bold" placeholder="0" />
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="block font-bold text-slate-700 mb-1">รายจ่ายก้อนใหญ่ใน 3-5 ปีข้างหน้า (บาท)</label>
-                                        <p className="text-xs text-slate-400 mb-2">เช่น เผื่อเงินไว้ซ่อมแซมบ้าน หรือซื้อรถใหม่ (ถ้าไม่มีใส่ 0)</p>
+                                        <label className="block font-bold text-slate-700 mb-1">รายจ่ายก้อนใหญ่ใน 3-5 ปีนี้ (บาท)</label>
+                                        <p className="text-xs text-slate-400 mb-2">เผื่อเงินไว้ซ่อมแซมบ้าน หรือซื้อรถใหม่ (ถ้าไม่มีใส่ 0)</p>
                                         <div className="relative">
                                             <span className="absolute left-4 top-4 text-slate-400 font-bold">฿</span>
                                             <input type="text" inputMode="numeric" value={data.largeExp} onChange={handleNumberInput('largeExp')} className="w-full pl-10 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:border-emerald-500 outline-none text-xl font-bold" placeholder="0" />
@@ -330,7 +388,7 @@
                                     </div>
                                     <div className="bg-rose-50 p-4 rounded-xl border border-rose-100 flex items-center justify-between gap-4">
                                         <div>
-                                            <label className="block font-bold text-rose-800 text-sm mb-1">อัตราเงินเฟ้อ (%)</label>
+                                            <label className="block font-bold text-rose-800 text-sm mb-1">อัตราเงินเฟ้อเผื่อไว้ (%)</label>
                                             <p className="text-[10px] text-rose-600">ค่าครองชีพที่สูงขึ้นต่อปี</p>
                                         </div>
                                         <input type="number" value={data.inflation} onChange={handleNumberInput('inflation')} className="w-20 px-3 py-2 bg-white border border-rose-200 rounded-lg outline-none text-center font-bold text-rose-700" step="0.1" />
@@ -347,7 +405,7 @@
                         {step === 3 && (
                             <div className="bg-white rounded-3xl p-6 md:p-10 shadow-xl shadow-slate-200/50 border border-slate-100 fade-in">
                                 <h2 className="text-2xl font-black text-slate-800 mb-2">หมวด 3: สุขภาพ & เกราะป้องกัน 🏥</h2>
-                                <p className="text-slate-500 text-sm mb-8">ความเสี่ยงอันดับ 1 ของวัยเกษียณคือค่ารักษาพยาบาล</p>
+                                <p className="text-slate-500 text-sm mb-8">เพราะความเสี่ยงอันดับ 1 วัยเกษียณคือ "ค่าหมอ"</p>
                                 
                                 <div className="space-y-6">
                                     <div>
@@ -357,20 +415,20 @@
                                                 <input type="radio" checked={data.healthCover === 'excellent'} onChange={() => updateData('healthCover', 'excellent')} className="w-5 h-5 accent-emerald-600" />
                                                 <div>
                                                     <div className="font-bold text-slate-800">ครอบคลุมสูง (เบิกได้เกือบหมด)</div>
-                                                    <div className="text-xs text-slate-500">ข้าราชการบำนาญ หรือ ประกันสุขภาพเหมาจ่าย</div>
+                                                    <div className="text-xs text-slate-500">ข้าราชการบำนาญ หรือ ประกันเหมาจ่ายวงเงินสูง</div>
                                                 </div>
                                             </label>
                                             <label className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${data.healthCover === 'partial' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}`}>
                                                 <input type="radio" checked={data.healthCover === 'partial'} onChange={() => updateData('healthCover', 'partial')} className="w-5 h-5 accent-amber-600" />
                                                 <div>
                                                     <div className="font-bold text-slate-800">ครอบคลุมบางส่วน (อาจมีส่วนต่าง)</div>
-                                                    <div className="text-xs text-slate-500">บัตรทอง, ประกันสังคม, หรือประกันที่จำกัดวงเงิน</div>
+                                                    <div className="text-xs text-slate-500">บัตรทอง, ประกันสังคม, ประกันจำกัดวงเงิน</div>
                                                 </div>
                                             </label>
                                             <label className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${data.healthCover === 'none' ? 'border-rose-500 bg-rose-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}`}>
                                                 <input type="radio" checked={data.healthCover === 'none'} onChange={() => updateData('healthCover', 'none')} className="w-5 h-5 accent-rose-600" />
                                                 <div>
-                                                    <div className="font-bold text-slate-800">จ่ายเองทั้งหมด / เอกชน 100%</div>
+                                                    <div className="font-bold text-slate-800">จ่ายเองทั้งหมด / รักษาเอกชน 100%</div>
                                                 </div>
                                             </label>
                                         </div>
@@ -386,7 +444,7 @@
                                             <label className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all ${data.healthConcern === 'high' ? 'border-rose-500 bg-rose-50' : 'border-slate-200 bg-slate-50'}`}>
                                                 <input type="radio" checked={data.healthConcern === 'high'} onChange={() => updateData('healthConcern', 'high')} className="hidden" />
                                                 <span className="text-3xl">🩺</span>
-                                                <span className="font-bold text-sm text-slate-700">มีโรคที่ต้องพบแพทย์</span>
+                                                <span className="font-bold text-sm text-slate-700">มีโรคที่ต้องพบแพทย์ประจำ</span>
                                             </label>
                                         </div>
                                     </div>
@@ -398,56 +456,98 @@
                             </div>
                         )}
 
-                        {/* --- STEP 4: เป้าหมาย --- */}
+                        {/* --- STEP 4: ความเสี่ยง --- */}
                         {step === 4 && (
                             <div className="bg-white rounded-3xl p-6 md:p-10 shadow-xl shadow-slate-200/50 border border-slate-100 fade-in">
-                                <h2 className="text-2xl font-black text-slate-800 mb-2">หมวด 4: สไตล์การลงทุน 🎯</h2>
-                                <p className="text-slate-500 text-sm mb-8">เราจะนำคะแนนส่วนนี้ไปผสานกันเพื่อเลือกรุ่นพอร์ตให้คุณ</p>
+                                <h2 className="text-2xl font-black text-slate-800 mb-2">หมวด 4: ประเมินสไตล์การลงทุน 🎯</h2>
+                                <p className="text-slate-500 text-sm mb-6">คะแนนรวม 4 ข้อนี้ จะถูกนำไปวิเคราะห์รุ่นพอร์ตที่เหมาะสมที่สุด</p>
                                 
                                 <div className="space-y-6">
+                                    {/* Q1: Experience */}
                                     <div>
-                                        <label className="block font-bold text-slate-700 mb-3">1. รับความผันผวน (เงินต้นลดลงชั่วคราว อาจมากถึง -50%) ได้แค่ไหน?</label>
-                                        <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                                            <label className={`flex flex-col items-center justify-center text-center gap-2 p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all ${data.risk === 'low' ? 'border-rose-500 bg-rose-50' : 'border-slate-200 bg-slate-50'}`}>
-                                                <input type="radio" checked={data.risk === 'low'} onChange={() => updateData('risk', 'low')} className="hidden" />
-                                                <span className="text-2xl">😨</span>
-                                                <span className="font-bold text-[10px] sm:text-xs text-slate-700">กังวลสุดๆ<br/>(รับได้ต่ำ)</span>
+                                        <label className="block font-bold text-slate-700 mb-2 text-sm">1. ประสบการณ์การลงทุนของคุณเป็นอย่างไร?</label>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {[
+                                                { val: "1", label: "ไม่เคยเลย ฝากเงินออมทรัพย์อย่างเดียว" },
+                                                { val: "2", label: "พอมีความรู้ เคยซื้อกองทุนรวม/หุ้นกู้ บ้าง" },
+                                                { val: "3", label: "เชี่ยวชาญ เทรดหุ้น/คริปโต เข้าใจวัฏจักรตลาด" }
+                                            ].map(opt => (
+                                                <label key={opt.val} className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all ${data.experience === opt.val ? 'border-sky-500 bg-sky-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                                                    <input type="radio" checked={data.experience === opt.val} onChange={() => updateData('experience', opt.val)} className="hidden" />
+                                                    <span className={`w-4 h-4 rounded-full border-2 mr-3 flex items-center justify-center ${data.experience === opt.val ? 'border-sky-500' : 'border-slate-300'}`}>
+                                                        {data.experience === opt.val && <span className="w-2 h-2 bg-sky-500 rounded-full"></span>}
+                                                    </span>
+                                                    <span className="text-sm font-semibold text-slate-700">{opt.label}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Q2: Reaction */}
+                                    <div>
+                                        <label className="block font-bold text-slate-700 mb-2 text-sm">2. สมมติว่าพอร์ตที่คุณลงทุน ร่วงหนัก -20% ภายใน 1 เดือน คุณจะทำอย่างไร?</label>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {[
+                                                { val: "1", label: "ตกใจ รีบขายทิ้งทั้งหมดเพื่อรักษาเงินต้นที่เหลือ" },
+                                                { val: "2", label: "รู้สึกกังวล แต่อยู่เฉยๆ รอให้ตลาดฟื้นกลับมา" },
+                                                { val: "3", label: "มองเป็นโอกาสทอง เข้าไปซื้อของถูกเพิ่มทันที" }
+                                            ].map(opt => (
+                                                <label key={opt.val} className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all ${data.reaction === opt.val ? 'border-sky-500 bg-sky-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                                                    <input type="radio" checked={data.reaction === opt.val} onChange={() => updateData('reaction', opt.val)} className="hidden" />
+                                                    <span className={`w-4 h-4 rounded-full border-2 mr-3 flex items-center justify-center ${data.reaction === opt.val ? 'border-sky-500' : 'border-slate-300'}`}>
+                                                        {data.reaction === opt.val && <span className="w-2 h-2 bg-sky-500 rounded-full"></span>}
+                                                    </span>
+                                                    <span className="text-sm font-semibold text-slate-700">{opt.label}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Q3: Risk Tolerance */}
+                                    <div>
+                                        <label className="block font-bold text-slate-700 mb-3 text-sm">3. รับความผันผวน (เงินแกว่งไปมา) โดยรวมได้แค่ไหน?</label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <label className={`flex flex-col items-center text-center gap-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${data.risk === '1' ? 'border-rose-500 bg-rose-50' : 'border-slate-200'}`}>
+                                                <input type="radio" checked={data.risk === '1'} onChange={() => updateData('risk', '1')} className="hidden" />
+                                                <span className="text-xl">😨</span>
+                                                <span className="font-bold text-[11px] text-slate-700">รับได้ต่ำมาก</span>
                                             </label>
-                                            <label className={`flex flex-col items-center justify-center text-center gap-2 p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all ${data.risk === 'medium' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-slate-50'}`}>
-                                                <input type="radio" checked={data.risk === 'medium'} onChange={() => updateData('risk', 'medium')} className="hidden" />
-                                                <span className="text-2xl">🤔</span>
-                                                <span className="font-bold text-[10px] sm:text-xs text-slate-700">เข้าใจตลาด<br/>(ปานกลาง)</span>
+                                            <label className={`flex flex-col items-center text-center gap-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${data.risk === '2' ? 'border-amber-500 bg-amber-50' : 'border-slate-200'}`}>
+                                                <input type="radio" checked={data.risk === '2'} onChange={() => updateData('risk', '2')} className="hidden" />
+                                                <span className="text-xl">🤔</span>
+                                                <span className="font-bold text-[11px] text-slate-700">รับได้ปานกลาง</span>
                                             </label>
-                                            <label className={`flex flex-col items-center justify-center text-center gap-2 p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all ${data.risk === 'high' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
-                                                <input type="radio" checked={data.risk === 'high'} onChange={() => updateData('risk', 'high')} className="hidden" />
-                                                <span className="text-2xl">😎</span>
-                                                <span className="font-bold text-[10px] sm:text-xs text-slate-700">ใจนิ่งรับได้<br/>(รับได้สูง)</span>
+                                            <label className={`flex flex-col items-center text-center gap-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${data.risk === '3' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}`}>
+                                                <input type="radio" checked={data.risk === '3'} onChange={() => updateData('risk', '3')} className="hidden" />
+                                                <span className="text-xl">😎</span>
+                                                <span className="font-bold text-[11px] text-slate-700">ใจนิ่งรับได้สูง</span>
                                             </label>
                                         </div>
                                     </div>
                                     
+                                    {/* Q4: Goal */}
                                     <div>
-                                        <label className="block font-bold text-slate-700 mb-3">2. ความตั้งใจหลักของ "เงินลงทุน" ก้อนนี้?</label>
-                                        <div className="space-y-3">
-                                            <label className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${data.goal === 'protect' ? 'border-slate-500 bg-slate-50' : 'border-slate-200 hover:bg-slate-50'}`}>
-                                                <input type="radio" checked={data.goal === 'protect'} onChange={() => updateData('goal', 'protect')} className="w-5 h-5 accent-slate-600" />
+                                        <label className="block font-bold text-slate-700 mb-3 text-sm">4. ความตั้งใจหลักของ "เงินลงทุน" ก้อนนี้?</label>
+                                        <div className="space-y-2">
+                                            <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${data.goal === '1' ? 'border-slate-500 bg-slate-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                                                <input type="radio" checked={data.goal === '1'} onChange={() => updateData('goal', '1')} className="w-4 h-4 accent-slate-600" />
                                                 <div>
-                                                    <div className="font-bold text-slate-800">เน้นปกป้องเงินต้น 🛡️</div>
-                                                    <div className="text-xs text-slate-500">ผลตอบแทนต่ำไม่เป็นไร ขอให้เงินอยู่ครบ</div>
+                                                    <div className="font-bold text-slate-800 text-sm">เน้นปกป้องเงินต้น 🛡️</div>
+                                                    <div className="text-[11px] text-slate-500">ผลตอบแทนต่ำไม่เป็นไร ขอเงินอยู่ครบ</div>
                                                 </div>
                                             </label>
-                                            <label className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${data.goal === 'cashflow' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}>
-                                                <input type="radio" checked={data.goal === 'cashflow'} onChange={() => updateData('goal', 'cashflow')} className="w-5 h-5 accent-blue-600" />
+                                            <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${data.goal === '2' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                                                <input type="radio" checked={data.goal === '2'} onChange={() => updateData('goal', '2')} className="w-4 h-4 accent-blue-600" />
                                                 <div>
-                                                    <div className="font-bold text-slate-800">เน้นกระแสเงินสด (ปันผล) 💸</div>
-                                                    <div className="text-xs text-slate-500">อยากให้เงินก้อนนี้งอกออกมาเป็นรายเดือนไว้ใช้จ่าย</div>
+                                                    <div className="font-bold text-slate-800 text-sm">เน้นกระแสเงินสด (ปันผล) 💸</div>
+                                                    <div className="text-[11px] text-slate-500">อยากได้ดอกผลมาใช้จ่ายรายเดือน</div>
                                                 </div>
                                             </label>
-                                            <label className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${data.goal === 'growth' ? 'border-purple-500 bg-purple-50' : 'border-slate-200 hover:bg-slate-50'}`}>
-                                                <input type="radio" checked={data.goal === 'growth'} onChange={() => updateData('goal', 'growth')} className="w-5 h-5 accent-purple-600" />
+                                            <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${data.goal === '3' ? 'border-purple-500 bg-purple-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                                                <input type="radio" checked={data.goal === '3'} onChange={() => updateData('goal', '3')} className="w-4 h-4 accent-purple-600" />
                                                 <div>
-                                                    <div className="font-bold text-slate-800">เน้นเติบโตเพื่อเป็นมรดก 📈</div>
-                                                    <div className="text-xs text-slate-500">เงินเย็นมาก ปล่อยทิ้งไว้ได้ยาวๆ ให้ลูกหลาน</div>
+                                                    <div className="font-bold text-slate-800 text-sm">เน้นเติบโตระยะยาว 📈</div>
+                                                    <div className="text-[11px] text-slate-500">เงินเย็นมาก ปล่อยทิ้งไว้ให้งอกเงยเต็มที่</div>
                                                 </div>
                                             </label>
                                         </div>
@@ -464,24 +564,51 @@
                         {step === 5 && analysis && (
                             <div className="space-y-6 fade-in">
                                 
-                                {/* Section: SWR & Survival Status */}
+                                {/* Section: SWR & Survival Status with Area Chart */}
                                 <div className={`bg-white rounded-3xl p-6 shadow-xl border-2 ${analysis.swrIcon} relative overflow-hidden`}>
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <div className={`p-2 rounded-xl ${analysis.swrIcon} text-xl`}>🩺</div>
+                                    <div className="flex items-start md:items-center gap-4 mb-4">
+                                        <div className={`p-3 rounded-2xl ${analysis.swrIcon} text-2xl shrink-0`}>🩺</div>
                                         <div>
-                                            <h2 className={`text-xl font-black ${analysis.swrClass}`}>{analysis.swrStatus}</h2>
-                                            <div className="text-xs font-bold text-slate-500">ผลการตรวจสุขภาพทางการเงิน (ประเมินที่ {analysis.yearsRemaining} ปี)</div>
+                                            <h2 className={`text-xl md:text-2xl font-black ${analysis.swrClass} leading-tight`}>{analysis.swrStatus}</h2>
+                                            <div className="text-xs font-bold text-slate-500 mt-1">ผลการจำลองอัตราความรอดของพอร์ต (Simulation)</div>
                                         </div>
                                     </div>
-                                    <p className="text-sm font-medium text-slate-700 leading-relaxed mt-4 bg-white/60 p-4 rounded-xl border border-white/50 backdrop-blur-sm">
+                                    
+                                    <p className="text-sm font-medium text-slate-700 leading-relaxed mb-6 bg-white/60 p-4 rounded-xl border border-white/50 backdrop-blur-sm shadow-sm">
                                         {analysis.swrMessage}
                                     </p>
+
+                                    {/* Projection Chart */}
+                                    <div className="bg-white rounded-xl p-4 border border-slate-200/50 shadow-inner">
+                                        <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 text-center">📈 กราฟจำลองมูลค่าความมั่งคั่งตามอายุ (Wealth Projection)</h3>
+                                        <div className="h-48 w-full">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={analysis.projectionData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                                                    <defs>
+                                                        <linearGradient id="colorWealth" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor={analysis.swrClass.includes('rose') ? '#f43f5e' : '#10b981'} stopOpacity={0.4}/>
+                                                            <stop offset="95%" stopColor={analysis.swrClass.includes('rose') ? '#f43f5e' : '#10b981'} stopOpacity={0}/>
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                                    <XAxis dataKey="age" tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(val) => 'อายุ '+val} axisLine={false} tickLine={false} />
+                                                    <YAxis tickFormatter={(val) => (val/1000000).toFixed(1)+'M'} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                                                    <Tooltip 
+                                                        formatter={(value) => [formatMoney(value), "มูลค่าคงเหลือ"]} 
+                                                        labelFormatter={(label) => `อายุ ${label} ปี`}
+                                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
+                                                    />
+                                                    <Area type="monotone" dataKey="wealth" stroke={analysis.swrClass.includes('rose') ? '#e11d48' : '#059669'} strokeWidth={2} fillOpacity={1} fill="url(#colorWealth)" />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Section: The Buckets */}
                                 <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100">
                                     <h2 className="text-2xl font-black text-slate-800 mb-1 flex items-center gap-2">🪣 กลยุทธ์แยกถังเงิน (Bucket Strategy)</h2>
-                                    <p className="text-sm text-slate-500 mb-6">หลักการคือแยกระหว่าง "เงินที่ต้องพร้อมใช้" ออกจาก "เงินลงทุน" เพื่อป้องกันการขายหุ้นตอนขาดทุน</p>
+                                    <p className="text-sm text-slate-500 mb-6">เพื่อความอุ่นใจ เราจะกันเงินสำหรับใช้จ่ายออกจากการลงทุน</p>
                                     
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         {/* ถังปลอดภัย */}
@@ -492,11 +619,11 @@
                                             
                                             <div className="space-y-2 text-[13px]">
                                                 <div className="flex justify-between border-b border-slate-200 pb-1">
-                                                    <span className="text-slate-500">กันไว้สำหรับค่ากินอยู่ 1 ปี</span>
+                                                    <span className="text-slate-500">ค่ากินอยู่/ผ่อนหนี้ 1 ปีเต็ม</span>
                                                     <span className="font-bold">{formatMoney(analysis.livingReserve)}</span>
                                                 </div>
                                                 <div className="flex justify-between border-b border-slate-200 pb-1">
-                                                    <span className="text-slate-500">กันไว้สำหรับสุขภาพ/ฉุกเฉิน</span>
+                                                    <span className="text-slate-500">สำรองสุขภาพฉุกเฉิน</span>
                                                     <span className="font-bold">{formatMoney(analysis.healthBuffer)}</span>
                                                 </div>
                                                 <div className="flex justify-between">
@@ -509,17 +636,17 @@
                                         {/* ถังลงทุน */}
                                         <div className={`rounded-2xl p-5 border-2 relative overflow-hidden ${analysis.investableCapital > 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
                                             <div className={`absolute top-0 right-0 text-[10px] font-bold px-3 py-1 rounded-bl-xl ${analysis.investableCapital > 0 ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-800'}`}>ถังที่ 2: การลงทุน</div>
-                                            <h3 className={`font-black text-lg flex items-center gap-2 ${analysis.investableCapital > 0 ? 'text-emerald-800' : 'text-amber-800'}`}>📈 ถังสำหรับจัดพอร์ตลงทุน</h3>
+                                            <h3 className={`font-black text-lg flex items-center gap-2 ${analysis.investableCapital > 0 ? 'text-emerald-800' : 'text-amber-800'}`}>📈 ถังเติบโตระยะยาว</h3>
                                             
                                             {analysis.investableCapital > 0 ? (
                                                 <>
                                                     <div className="text-3xl font-black text-emerald-600 mt-2 mb-4">{formatMoney(analysis.investableCapital)}</div>
-                                                    <p className="text-[13px] text-emerald-700 font-medium">นี่คือเงินเย็นสุทธิ หลังจากหักหนี้และเงินสำรองฉุกเฉินแล้ว สามารถนำมาจัดพอร์ตให้เงินทำงานชนะเงินเฟ้อได้สบายใจ</p>
+                                                    <p className="text-[13px] text-emerald-700 font-medium">เงินเย็นสุทธิ ที่สามารถนำไปจัดพอร์ตรับความเสี่ยงเพื่อสร้างผลตอบแทนสู้กับเงินเฟ้อได้</p>
                                                 </>
                                             ) : (
                                                 <div className="mt-3">
                                                     <div className="text-3xl font-black text-amber-600 mb-2">฿0</div>
-                                                    <p className="text-[13px] text-amber-700 font-medium">เงินก้อนที่คุณมี เหมาะสำหรับการเก็บในสินทรัพย์สภาพคล่องสูง เพื่อให้อุ่นใจและรองรับรายจ่ายพื้นฐานก่อนครับ</p>
+                                                    <p className="text-[13px] text-amber-700 font-medium">เงินก้อนที่คุณมี เหมาะสำหรับการเก็บในสินทรัพย์ปลอดภัยทั้งหมดเพื่อความอุ่นใจก่อนครับ</p>
                                                 </div>
                                             )}
                                         </div>
@@ -529,15 +656,15 @@
                                 {/* Section: Portfolio Recommendation */}
                                 {analysis.investableCapital > 0 && (
                                     <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100">
-                                        <h2 className="text-xl font-black text-slate-800 mb-1">โมเดลพอร์ตแนะนำสำหรับคุณ 📊</h2>
-                                        <p className="text-sm text-slate-500 mb-6">จัดตามระดับความเสี่ยงและเป้าหมายที่คุณเลือก: <strong className="text-emerald-600">{analysis.strategyName}</strong></p>
+                                        <h2 className="text-xl font-black text-slate-800 mb-1">สัดส่วนพอร์ตที่แนะนำ 📊</h2>
+                                        <p className="text-sm text-slate-500 mb-6">วิเคราะห์จากระดับความเสี่ยงและประสบการณ์ของคุณ: <strong className="text-emerald-600">{analysis.strategyName}</strong></p>
                                         
-                                        <div className="flex flex-col md:flex-row items-center gap-8">
+                                        <div className="flex flex-col md:flex-row items-center gap-8 mb-6">
                                             {/* Graph with Center Text */}
-                                            <div className="w-full md:w-1/2 h-64 relative">
+                                            <div className="w-full md:w-1/2 h-56 relative">
                                                 <ResponsiveContainer width="100%" height="100%">
                                                     <PieChart>
-                                                        <Pie data={analysis.portfolio} cx="50%" cy="50%" innerRadius={65} outerRadius={95} paddingAngle={5} dataKey="value">
+                                                        <Pie data={analysis.portfolio} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={5} dataKey="value">
                                                             {analysis.portfolio.map((entry, index) => (
                                                                 <Cell key={`cell-${index}`} fill={entry.color} />
                                                             ))}
@@ -546,7 +673,7 @@
                                                     </PieChart>
                                                 </ResponsiveContainer>
                                                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                                    <span className="text-xs text-slate-500 font-bold">ยอดจัดพอร์ต</span>
+                                                    <span className="text-xs text-slate-500 font-bold">ลงทุนจริง</span>
                                                     <span className="font-black text-slate-800 text-lg">{formatShort(analysis.investableCapital)}</span>
                                                 </div>
                                             </div>
@@ -554,7 +681,7 @@
                                             {/* Breakdown */}
                                             <div className="w-full md:w-1/2 space-y-4">
                                                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-4 text-center">
-                                                    <div className="text-[11px] font-bold text-slate-500 uppercase">ผลตอบแทนคาดหวังของพอร์ตนี้</div>
+                                                    <div className="text-[11px] font-bold text-slate-500 uppercase">ผลตอบแทนคาดหวังระยะยาว</div>
                                                     <div className="text-xl font-black text-emerald-600">{analysis.expectedReturn}</div>
                                                 </div>
                                                 
@@ -572,15 +699,30 @@
                                                 ))}
                                             </div>
                                         </div>
+
+                                        {/* Action Plan (แผนปฏิบัติการ) */}
+                                        <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 mt-4">
+                                            <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                                <span className="text-lg">📌</span> ขั้นตอนการลงมือทำ (Action Plan)
+                                            </h3>
+                                            <div className="space-y-4">
+                                                {analysis.actionPlan.map((plan, idx) => (
+                                                    <div key={idx} className="flex gap-3">
+                                                        <div className="w-1.5 bg-sky-400 rounded-full mt-1.5 shrink-0"></div>
+                                                        <div>
+                                                            <h4 className="font-bold text-slate-700 text-sm mb-1">{plan.title}</h4>
+                                                            <p className="text-[13px] text-slate-600 leading-relaxed">{plan.desc}</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
 
                                 {/* Actions */}
-                                <div className="flex flex-col gap-3 pt-4">
-                                    <button onClick={copyPlan} id="btnCopyPlan" className="w-full bg-slate-800 text-white font-bold py-4 rounded-2xl hover:bg-slate-700 transition shadow-lg flex items-center justify-center gap-2">
-                                        📄 คัดลอกสรุปแผน (Copy & Share)
-                                    </button>
-                                    <button onClick={resetApp} className="text-slate-500 font-bold hover:text-slate-800 py-2">
+                                <div className="text-center pt-6">
+                                    <button onClick={resetApp} className="text-slate-500 font-bold hover:text-slate-800 py-2 transition-colors">
                                         🔄 ทำแบบประเมินใหม่อีกครั้ง
                                     </button>
                                 </div>
