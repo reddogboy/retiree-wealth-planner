@@ -237,7 +237,7 @@
                     <div className="max-w-3xl mx-auto px-4 pt-8">
                         <div className="text-center mb-8">
                             <h1 className="text-3xl font-black text-slate-800 mb-2">Retire<span className="text-emerald-600">Safe</span> 🛡️</h1>
-                            <p className="text-slate-500 font-medium text-sm">ออกแบบการจัดสรรเงินก้อนวัยเกษียณ ให้เงินไม่หมดก่อนตาย</p>
+                            <p className="text-slate-500 font-medium text-sm">ออกแบบการจัดสรรเงินก้อนวัยเกษียณ ให้เงินไม่หมด</p>
                         </div>
 
                         {/* Progress Bar */}
@@ -255,7 +255,7 @@
                         {step === 1 && (
                             <div className="bg-white rounded-3xl p-6 md:p-10 shadow-xl shadow-slate-200/50 border border-slate-100 fade-in">
                                 <h2 className="text-2xl font-black text-slate-800 mb-2">หมวด 1: ข้อมูลตั้งต้น 💰</h2>
-                                <p className="text-slate-500 text-sm mb-6">เพื่อประเมินสายป่านว่าคุณต้องเตรียมตัวสำหรับกี่ปี</p>
+                                <p className="text-slate-500 text-sm mb-6">เพื่อประเมินว่าคุณต้องเตรียมตัวสำหรับกี่ปี</p>
                                 
                                 <div className="space-y-5">
                                     <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
@@ -269,7 +269,7 @@
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="block font-bold text-slate-700 mb-1">รายรับที่คาดว่าจะได้หลังเกษียณ (บาท/เดือน)</label>
+                                        <label className="block font-bold text-slate-700 mb-1">รายรับต่อเดือนที่จะได้หลังเกษียณ (บาท/เดือน)</label>
                                         <p className="text-[11px] text-slate-400 mb-2">เช่น บำนาญชราภาพ, ประกันสังคม, ค่าเช่า (ถ้าไม่มีใส่ 0)</p>
                                         <div className="relative">
                                             <span className="absolute left-4 top-4 text-slate-400 font-bold">฿</span>
@@ -306,7 +306,7 @@
                                 <div className="space-y-6">
                                     <div>
                                         <label className="block font-bold text-slate-700 mb-1">ค่าใช้จ่ายจำเป็น (บาท/เดือน)</label>
-                                        <p className="text-xs text-slate-400 mb-2">ค่าอาหาร, ค่าน้ำไฟ, ของใช้, ส่วนกลาง (ขาดไม่ได้)</p>
+                                        <p className="text-xs text-slate-400 mb-2">เช่น ค่าอาหาร, ค่าน้ำไฟ, ของใช้, ส่วนกลาง (ขาดไม่ได้)</p>
                                         <div className="relative">
                                             <span className="absolute left-4 top-4 text-slate-400 font-bold">฿</span>
                                             <input type="text" inputMode="numeric" value={data.essentialExp} onChange={handleNumberInput('essentialExp')} className="w-full pl-10 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:border-emerald-500 outline-none text-xl font-bold" placeholder="0" />
@@ -314,7 +314,7 @@
                                     </div>
                                     <div>
                                         <label className="block font-bold text-slate-700 mb-1">ค่าความสุข/ท่องเที่ยว (บาท/เดือน)</label>
-                                        <p className="text-xs text-slate-400 mb-2">ทานข้าวนอกบ้าน, งานอดิเรก, ใส่ซองงานแต่ง</p>
+                                        <p className="text-xs text-slate-400 mb-2">เช่น ทานข้าวนอกบ้าน, งานอดิเรก, ใส่ซองงานแต่ง</p>
                                         <div className="relative">
                                             <span className="absolute left-4 top-4 text-slate-400 font-bold">฿</span>
                                             <input type="text" inputMode="numeric" value={data.discretionaryExp} onChange={handleNumberInput('discretionaryExp')} className="w-full pl-10 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:border-emerald-500 outline-none text-xl font-bold" placeholder="0" />
@@ -322,7 +322,7 @@
                                     </div>
                                     <div>
                                         <label className="block font-bold text-slate-700 mb-1">รายจ่ายก้อนใหญ่ใน 3-5 ปีข้างหน้า (บาท)</label>
-                                        <p className="text-xs text-slate-400 mb-2">เผื่อเงินไว้ซ่อมแซมบ้าน หรือซื้อรถใหม่ (ถ้าไม่มีใส่ 0)</p>
+                                        <p className="text-xs text-slate-400 mb-2">เช่น เผื่อเงินไว้ซ่อมแซมบ้าน หรือซื้อรถใหม่ (ถ้าไม่มีใส่ 0)</p>
                                         <div className="relative">
                                             <span className="absolute left-4 top-4 text-slate-400 font-bold">฿</span>
                                             <input type="text" inputMode="numeric" value={data.largeExp} onChange={handleNumberInput('largeExp')} className="w-full pl-10 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:border-emerald-500 outline-none text-xl font-bold" placeholder="0" />
@@ -406,7 +406,7 @@
                                 
                                 <div className="space-y-6">
                                     <div>
-                                        <label className="block font-bold text-slate-700 mb-3">1. รับความผันผวน (เงินต้นลดลงชั่วคราว) ได้แค่ไหน?</label>
+                                        <label className="block font-bold text-slate-700 mb-3">1. รับความผันผวน (เงินต้นลดลงชั่วคราว อาจมากถึง -50%) ได้แค่ไหน?</label>
                                         <div className="grid grid-cols-3 gap-2 sm:gap-3">
                                             <label className={`flex flex-col items-center justify-center text-center gap-2 p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all ${data.risk === 'low' ? 'border-rose-500 bg-rose-50' : 'border-slate-200 bg-slate-50'}`}>
                                                 <input type="radio" checked={data.risk === 'low'} onChange={() => updateData('risk', 'low')} className="hidden" />
